@@ -40,7 +40,7 @@ $entryPath = Join-Path $engine 'src\core\sdl2\SDLEntrypoint.cpp'
 $pickerPath = Join-Path $engine 'src\core\sdl2\krkr-xbox-folder-picker.cpp'
 $pickerTemplate = Join-Path $PSScriptRoot 'krkr-xbox-folder-picker.cpp'
 Copy-Item $pickerTemplate $pickerPath -Force
-$entryText = [IO.File]::ReadAllText($entryPath)
+$entryText = [IO.File]::ReadAllText($entryPath) -replace "`r`n", "`n"
 $newline = "`n"
 $declaration = 'extern "C" const char *krkr_xbox_pick_game_folder();'
 $signature = '#if defined(USE_SDL_MAIN)' + $newline + 'extern "C" int SDL_main(int argc, char **argv)'
