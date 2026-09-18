@@ -22,11 +22,11 @@ jobs:
         shell: pwsh
         run: |
           $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-          $sdkBin = Get-ChildItem $sdkRoot -Directory | Sort-Object Name | Select-Object -Last 1
-          if (-not $sdkBin) { throw "Windows SDK tools not found under $sdkRoot" }
-          $x64 = Join-Path $sdkBin.FullName 'x64'
-          if (-not (Test-Path (Join-Path $x64 'makeappx.exe'))) { throw "makeappx.exe not found in $x64" }
-          $x64 | Out-File -FilePath $env:GITHUB_PATH -Append
+          $makeAppx = Get-ChildItem $sdkRoot -Filter 'makeappx.exe' -File -Recurse |
+            Where-Object { $_.FullName -match '\\x64\\makeappx\.exe$' } |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $makeAppx) { throw "x64 makeappx.exe not found under $sdkRoot" }
+          $makeAppx.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Install vcpkg dependencies
         shell: pwsh
