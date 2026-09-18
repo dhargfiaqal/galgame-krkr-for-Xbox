@@ -75,6 +75,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 if ($Backend -eq 'cmake') {
     $cmakeLists = Join-Path $engine 'CMakeLists.txt'
     $cmakeText = [IO.File]::ReadAllText($cmakeLists)
+    $cmakeText = $cmakeText.Replace('if((${CMAKE_SYSTEM_PROCESSOR} STREQUAL "i686") OR (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "amd64"))', 'if(CMAKE_SYSTEM_PROCESSOR STREQUAL "i686" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")')
     $sdlWinrtSource = 'external/SDL/src/main/winrt/SDL_winrt_main_NonXAML.cpp'
     $pickerSource = 'src/core/sdl2/krkr-xbox-folder-picker.cpp'
     $minizSource = 'external/miniz/miniz.c'
