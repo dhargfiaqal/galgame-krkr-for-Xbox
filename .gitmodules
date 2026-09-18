@@ -1,0 +1,4 @@
+[submodule "engine/krkrsdl2"]
+	path = engine/krkrsdl2
+	url = https://github.com/krkrsdl2/krkrsdl2.git
+	branch = master

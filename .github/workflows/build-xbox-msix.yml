@@ -1,0 +1,59 @@
+name: Build Xbox MSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      game_archive_url:
+        description: 'Optional URL of a ZIP containing startup.tjs or an XP3 archive'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = 'C:\vcpkg'
+          & "$env:VCPKG_ROOT\vcpkg.exe" install sdl2:x64-uwp freetype:x64-uwp libpng:x64-uwp libjpeg-turbo:x64-uwp zlib:x64-uwp
+          "VCPKG_ROOT=$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build and package
+        shell: pwsh
+        env:
+          GAME_ARCHIVE_URL: ${{ inputs.game_archive_url }}
+        run: |
+          $url = $env:GAME_ARCHIVE_URL
+          if ($url) {
+            .\xbox\build-cmake.ps1 -GameArchiveUrl $url
+          } else {
+            throw 'Provide game_archive_url for a playable package.'
+          }
+
+      - name: Sign MSIX with a temporary development certificate
+        shell: pwsh
+        run: |
+          $password = ConvertTo-SecureString 'krkr-xbox-dev' -AsPlainText -Force
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=KrkrXbox' -KeyUsage DigitalSignature -FriendlyName 'KRKR Xbox Development'
+          Export-PfxCertificate -Cert $cert -FilePath out\krkr-xbox-dev.pfx -Password $password | Out-Null
+          Export-Certificate -Cert $cert -FilePath out\krkr-xbox-dev.cer | Out-Null
+          $signTool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $signTool) { throw 'Windows SDK signtool.exe was not found.' }
+          & $signTool.FullName sign /fd SHA256 /f out\krkr-xbox-dev.pfx /p krkr-xbox-dev out\KRKR-Xbox.msix
+          Remove-Item out\krkr-xbox-dev.pfx -Force
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: KRKR-Xbox-MSIX
+          path: |
+            out/KRKR-Xbox.msix
+            out/krkr-xbox-dev.cer
+          if-no-files-found: error
