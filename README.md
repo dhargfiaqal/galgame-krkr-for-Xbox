@@ -1,0 +1,1 @@
+# galgame-krkr-for-Xbox
