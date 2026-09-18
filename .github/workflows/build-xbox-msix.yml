@@ -2,11 +2,6 @@ name: Build Xbox MSIX
 
 on:
   workflow_dispatch:
-    inputs:
-      game_archive_url:
-        description: 'Optional URL of a ZIP containing startup.tjs or an XP3 archive'
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -27,15 +22,8 @@ jobs:
 
       - name: Build and package
         shell: pwsh
-        env:
-          GAME_ARCHIVE_URL: ${{ inputs.game_archive_url }}
         run: |
-          $url = $env:GAME_ARCHIVE_URL
-          if ($url) {
-            .\xbox\build-cmake.ps1 -GameArchiveUrl $url
-          } else {
-            throw 'Provide game_archive_url for a playable package.'
-          }
+          .\xbox\build-cmake.ps1
 
       - name: Sign MSIX with a temporary development certificate
         shell: pwsh

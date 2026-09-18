@@ -37,8 +37,12 @@ if (-not (Test-Path (Join-Path $engine 'meson.build'))) {
 }
 
 $entryPath = Join-Path $engine 'src\core\sdl2\SDLEntrypoint.cpp'
+$pickerPath = Join-Path $engine 'src\core\sdl2\krkr-xbox-folder-picker.cpp'
+$pickerTemplate = Join-Path $PSScriptRoot 'krkr-xbox-folder-picker.cpp'
+Copy-Item $pickerTemplate $pickerPath -Force
 $entryText = [IO.File]::ReadAllText($entryPath)
 $newline = "`n"
+$declaration = 'extern "C" const char *krkr_xbox_pick_game_folder();'
 $signature = '#if defined(USE_SDL_MAIN)' + $newline + 'extern "C" int SDL_main(int argc, char **argv)'
 $signatureReplacement = '#if defined(__WINRT__) || defined(USE_SDL_MAIN)' + $newline + 'extern "C" int SDL_main(int argc, char **argv)'
 if ($entryText.Contains('#if defined(__WINRT__) || defined(USE_SDL_MAIN)')) {
@@ -50,9 +54,19 @@ if ($entryText.Contains('#if defined(__WINRT__) || defined(USE_SDL_MAIN)')) {
 }
 if (-not $entryAlreadyAdapted) {
     $entryText = $entryText.Replace($signature, $signatureReplacement)
-    if (-not $entryText.EndsWith("`n")) { $entryText += "`n" }
-    [IO.File]::WriteAllText($entryPath, $entryText, [Text.UTF8Encoding]::new($false))
 }
+$includeLine = '#include "SysInitImpl.h"'
+if (-not $entryText.Contains($declaration)) {
+    $entryText = $entryText.Replace($includeLine, $includeLine + $newline + $declaration)
+}
+$mainOpen = "{$newline`ttry$newline`t{$newline"
+$mainOpenReplacement = "{$newline#ifdef __WINRT__$newline`tconst char *selected_folder = krkr_xbox_pick_game_folder();$newline`tif (selected_folder == nullptr) return 0;$newline`tchar *folder_argv[] = { argv[0], const_cast<char *>(selected_folder) };$newline`targc = 2;$newline`targv = folder_argv;$newline#endif$newline`ttry$newline`t{$newline"
+if (-not $entryText.Contains('#ifdef __WINRT__' + $newline + "`tconst char *selected_folder")) {
+    if (-not $entryText.Contains($mainOpen)) { throw 'KRKR SDL2 main body does not match the supported upstream revision.' }
+    $entryText = $entryText.Replace($mainOpen, $mainOpenReplacement)
+}
+if (-not $entryText.EndsWith("`n")) { $entryText += "`n" }
+[IO.File]::WriteAllText($entryPath, $entryText, [Text.UTF8Encoding]::new($false))
 
 if (Test-Path $build) { Remove-Item $build -Recurse -Force }
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -62,12 +76,13 @@ if ($Backend -eq 'cmake') {
     $cmakeLists = Join-Path $engine 'CMakeLists.txt'
     $cmakeText = [IO.File]::ReadAllText($cmakeLists)
     $sdlWinrtSource = 'external/SDL/src/main/winrt/SDL_winrt_main_NonXAML.cpp'
+    $pickerSource = 'src/core/sdl2/krkr-xbox-folder-picker.cpp'
     if (-not $cmakeText.Contains('src/core/sdl2/SDLEntrypoint.cpp') -or -not (Test-Path (Join-Path $engine $sdlWinrtSource))) {
         throw 'KRKR SDL2 CMake source layout does not contain the expected SDL WinRT entrypoint.'
     }
-    if (-not $cmakeText.Contains($sdlWinrtSource)) {
-        $cmakeText = $cmakeText.Replace('src/core/sdl2/SDLEntrypoint.cpp', "src/core/sdl2/SDLEntrypoint.cpp`n    $sdlWinrtSource")
-        $cmakeText += $newline + 'set_source_files_properties(' + $sdlWinrtSource + ' PROPERTIES COMPILE_OPTIONS "/ZW")' + $newline
+    if (-not $cmakeText.Contains($sdlWinrtSource) -or -not $cmakeText.Contains($pickerSource)) {
+        $cmakeText = $cmakeText.Replace('src/core/sdl2/SDLEntrypoint.cpp', "src/core/sdl2/SDLEntrypoint.cpp`n    $sdlWinrtSource`n    $pickerSource")
+        $cmakeText += $newline + 'set_source_files_properties(' + $sdlWinrtSource + ' ' + $pickerSource + ' PROPERTIES COMPILE_OPTIONS "/ZW")' + $newline
         [IO.File]::WriteAllText($cmakeLists, $cmakeText, [Text.UTF8Encoding]::new($false))
     }
     $toolchain = Join-Path $env:VCPKG_ROOT 'scripts\buildsystems\vcpkg.cmake'
@@ -83,7 +98,7 @@ if ($Backend -eq 'cmake') {
 }
 
 $binary = Get-ChildItem $build -Filter '*.exe' -Recurse | Where-Object { $_.Name -notmatch 'test' } | Sort-Object FullName | Select-Object -First 1
-if (-not $binary) { throw 'Meson completed but no executable was produced.' }
+if (-not $binary) { throw 'Build completed but no executable was produced.' }
 Copy-Item $binary.FullName (Join-Path $stage 'krkrsdl2.exe')
 
 Copy-Item (Join-Path $PSScriptRoot 'Package.appxmanifest') $stage
@@ -110,12 +125,13 @@ if (-not $game -and $GameArchiveUrl) {
     Invoke-WebRequest -Uri $GameArchiveUrl -OutFile $download
     Expand-Archive -Path $download -DestinationPath $game -Force
 }
-if (-not $game) { throw 'Set KRKR_GAME to a directory containing startup.tjs or a game XP3 before building.' }
-if (-not (Test-Path $game)) { throw "Game path does not exist: $game" }
-if (-not (Test-Path (Join-Path $game 'startup.tjs')) -and -not (Get-ChildItem $game -Filter '*.xp3' -File)) {
-    throw 'KRKR_GAME must contain startup.tjs or at least one XP3 archive.'
+if ($game) {
+    if (-not (Test-Path $game)) { throw "Game path does not exist: $game" }
+    if (-not (Test-Path (Join-Path $game 'startup.tjs')) -and -not (Get-ChildItem $game -Filter '*.xp3' -File)) {
+        throw 'KRKR_GAME must contain startup.tjs or at least one XP3 archive.'
+    }
+    Copy-Item (Join-Path $game '*') $stage -Recurse -Force
 }
-Copy-Item (Join-Path $game '*') $stage -Recurse -Force
 
 if (Test-Path $msix) { Remove-Item $msix -Force }
 makeappx pack /d $stage /p $msix /o

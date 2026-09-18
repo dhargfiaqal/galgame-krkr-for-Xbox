@@ -1,6 +1,6 @@
 # KRKR Xbox UWP
 
-本目录把 [Kirikiri SDL2](https://github.com/krkrsdl2/krkrsdl2) 作为引擎上游，目标是生成可在 Xbox Developer Mode 安装的 MSIX。仓库根目录只保存移植层；构建脚本会自动浅克隆引擎及其子模块，避免把上游源码复制进本项目。
+本目录把 [Kirikiri SDL2](https://github.com/krkrsdl2/krkrsdl2) 作为引擎上游，目标是生成可在 Xbox Developer Mode 安装的 MSIX。启动后会像 PSP 模拟器一样打开文件夹选择器，选择游戏目录后直接运行；构建包不包含游戏资源。
 
 ## 在 Windows 上构建
 
@@ -25,17 +25,17 @@ $env:KRKR_GAME = 'D:\Games\YourGame'
 .\xbox\build-cmake.ps1
 ```
 
-该路线使用 Visual Studio 2022 的 CMake 生成器、Windows Store 工具链和 `x64-uwp` SDL2 依赖，适合 Xbox 主机的 x64 开发者模式包。
+该路线使用 Visual Studio 2022 的 CMake 生成器、Windows Store 工具链和 `x64-uwp` SDL2 依赖，适合 Xbox 主机的 x64 开发者模式包。首次启动选择目录后，授权会保存到 UWP `FutureAccessList`，下次启动优先恢复上次目录。
 
 ## 没有 Windows
 
-仓库提供了 GitHub Actions 云端构建：[`.github/workflows/build-xbox-msix.yml`](../.github/workflows/build-xbox-msix.yml)。将项目推送到 GitHub 后，在 **Actions → Build Xbox MSIX → Run workflow** 中填写一个由你控制的 ZIP 地址；ZIP 内必须有 `startup.tjs` 或 XP3 文件。工作流会在 `windows-2022` runner 上构建、生成临时开发证书并签名，然后把 `KRKR-Xbox.msix` 和 `.cer` 上传为 Artifact。
+仓库提供了 GitHub Actions 云端构建：[`.github/workflows/build-xbox-msix.yml`](../.github/workflows/build-xbox-msix.yml)。将项目推送到 GitHub 后，在 **Actions → Build Xbox MSIX → Run workflow**，工作流会在 `windows-2022` runner 上构建、生成临时开发证书并签名，然后把 `KRKR-Xbox.msix` 和 `.cer` 上传为 Artifact。不需要提供游戏 ZIP。
 
 下载 Artifact 后，先在 Xbox Dev Mode 的证书管理/Device Portal 中安装 `krkr-xbox-dev.cer`，再安装 MSIX。每次工作流运行都会生成新证书，旧包和旧证书不能混用。
 
-只应上传你有权使用的游戏资源。不要把受 DRM 或加密保护的商业资源提交到仓库或公开 URL。
+游戏文件由你在 Xbox 上通过系统文件夹选择器选择；应用只使用系统授予的目录权限。不要选择或运行你没有合法使用权的商业资源。
 
-`KRKR_GAME` 必须包含 `startup.tjs` 或至少一个 XP3 包以及游戏所需的其他资源。脚本会生成最小 PNG 图标，生成物是 `out\KRKR-Xbox.msix`。
+脚本只生成引擎 MSIX 和最小 PNG 图标，生成物是 `out\KRKR-Xbox.msix`；游戏目录不参与构建。
 
 首次拉取本项目后直接运行脚本即可；也可以预先执行：
 
