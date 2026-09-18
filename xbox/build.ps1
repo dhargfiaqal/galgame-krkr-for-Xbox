@@ -87,11 +87,21 @@ if ($Backend -eq 'cmake') {
     }
     $toolchain = Join-Path $env:VCPKG_ROOT 'scripts\buildsystems\vcpkg.cmake'
     if (-not (Test-Path $toolchain)) { throw "vcpkg toolchain not found: $toolchain" }
-    cmake -S $engine -B $build -G 'Visual Studio 17 2022' -A x64 `
-        -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0.18362.0 `
-        -DCMAKE_TOOLCHAIN_FILE=$toolchain -DVCPKG_TARGET_TRIPLET=x64-uwp `
+    $cmakeArgs = @(
+        '-S', $engine,
+        '-B', $build,
+        '-G', 'Visual Studio 17 2022',
+        '-A', 'x64',
+        '-DCMAKE_SYSTEM_NAME=WindowsStore',
+        '-DCMAKE_SYSTEM_VERSION=10.0.18362.0',
+        "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+        '-DVCPKG_TARGET_TRIPLET=x64-uwp',
         '-DCMAKE_CXX_FLAGS=/DWINAPI_FAMILY=WINAPI_FAMILY_APP /D__WINRT__'
+    )
+    & cmake @cmakeArgs
+    if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE" }
     cmake --build $build --config Release --parallel
+    if ($LASTEXITCODE -ne 0) { throw "CMake build failed with exit code $LASTEXITCODE" }
 } else {
     meson setup $build $engine --backend=$Backend --native-file (Join-Path $PSScriptRoot 'meson-uwp.ini') --buildtype=release
     meson compile -C $build
