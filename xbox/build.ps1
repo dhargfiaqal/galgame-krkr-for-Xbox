@@ -77,12 +77,19 @@ if ($Backend -eq 'cmake') {
     $cmakeText = [IO.File]::ReadAllText($cmakeLists)
     $sdlWinrtSource = 'external/SDL/src/main/winrt/SDL_winrt_main_NonXAML.cpp'
     $pickerSource = 'src/core/sdl2/krkr-xbox-folder-picker.cpp'
+    $minizSource = 'external/miniz/miniz.c'
+    $minizHeader = Join-Path $engine 'external\miniz\miniz.h'
+    $minizC = Join-Path $engine 'external\miniz\miniz.c'
+    New-Item -ItemType Directory -Path (Split-Path $minizHeader) -Force | Out-Null
+    Invoke-WebRequest 'https://raw.githubusercontent.com/richgel999/miniz/master/miniz.h' -OutFile $minizHeader
+    Invoke-WebRequest 'https://raw.githubusercontent.com/richgel999/miniz/master/miniz.c' -OutFile $minizC
     if (-not $cmakeText.Contains('src/core/sdl2/SDLEntrypoint.cpp') -or -not (Test-Path (Join-Path $engine $sdlWinrtSource))) {
         throw 'KRKR SDL2 CMake source layout does not contain the expected SDL WinRT entrypoint.'
     }
-    if (-not $cmakeText.Contains($sdlWinrtSource) -or -not $cmakeText.Contains($pickerSource)) {
-        $cmakeText = $cmakeText.Replace('src/core/sdl2/SDLEntrypoint.cpp', "src/core/sdl2/SDLEntrypoint.cpp`n    $sdlWinrtSource`n    $pickerSource")
+    if (-not $cmakeText.Contains($sdlWinrtSource) -or -not $cmakeText.Contains($pickerSource) -or -not $cmakeText.Contains($minizSource)) {
+        $cmakeText = $cmakeText.Replace('src/core/sdl2/SDLEntrypoint.cpp', "src/core/sdl2/SDLEntrypoint.cpp`n    $sdlWinrtSource`n    $pickerSource`n    $minizSource")
         $cmakeText += $newline + 'set_source_files_properties(' + $sdlWinrtSource + ' ' + $pickerSource + ' PROPERTIES COMPILE_OPTIONS "/ZW")' + $newline
+        $cmakeText += 'target_include_directories(${KRKRSDL2_NAME} PRIVATE external/miniz)' + $newline
         [IO.File]::WriteAllText($cmakeLists, $cmakeText, [Text.UTF8Encoding]::new($false))
     }
     $toolchain = Join-Path $env:VCPKG_ROOT 'scripts\buildsystems\vcpkg.cmake'
